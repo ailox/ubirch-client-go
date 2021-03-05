@@ -48,27 +48,10 @@ func signer(ctx context.Context, msgHandler chan HTTPMessage, p *ExtendedProtoco
 		case msg := <-msgHandler:
 			name := msg.ID.String()
 
-			// buffer last previous signature to be able to reset it in case sending UPP to backend fails
-			prevSign, found := p.Signatures[msg.ID]
-			if !found {
-				prevSign = make([]byte, 64)
-			}
-
 			resp, err := handleSigningRequest(p, name, msg.Hash[:], msg.Auth)
 			msg.Response <- resp
 			if err != nil {
 				log.Errorf("%s: %v", name, err)
-
-				// reset previous signature in protocol context to ensure intact chain
-				p.Signatures[msg.ID] = prevSign
-			} else {
-				// persist last signature after UPP was successfully received in ubirch backend
-				err = p.PersistContext()
-				if err != nil {
-					msg.Response <- errorResponse(http.StatusInternalServerError, "")
-					return fmt.Errorf("unable to persist last signature: %v [\"%s\": \"%s\"]",
-						err, name, base64.StdEncoding.EncodeToString(p.Signatures[msg.ID]))
-				}
 			}
 
 		case <-ctx.Done():

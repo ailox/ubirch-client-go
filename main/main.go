@@ -143,12 +143,12 @@ func main() {
 	})
 
 	//wait until all function calls from the Go method have returned
-	if err = waitUntilDone(g, p); err != nil {
+	if err = waitUntilDone(g, &p); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func waitUntilDone(g *errgroup.Group, p ExtendedProtocol) error {
+func waitUntilDone(g *errgroup.Group, p *ExtendedProtocol) error {
 	groupErr := g.Wait()
 
 	if err := p.Deinit(); err != nil {

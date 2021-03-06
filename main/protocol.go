@@ -92,6 +92,11 @@ func (p *ExtendedProtocol) Init(configDir string, filename string, dsn string, k
 }
 
 func (p *ExtendedProtocol) Deinit() error {
+	err := p.PersistContext()
+	if err != nil {
+		log.Error(err)
+	}
+
 	if p.db != nil {
 		if err := p.db.Close(); err != nil {
 			return fmt.Errorf("unable to close database connection: %v", err)

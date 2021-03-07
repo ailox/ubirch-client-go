@@ -17,7 +17,6 @@
 package main
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -52,21 +51,6 @@ type Verifier struct {
 	verifyServiceURL              string
 	keyServiceURL                 string
 	verifyFromKnownIdentitiesOnly bool
-}
-
-// verifier retrieves corresponding UPP for a given hash from the ubirch backend and verifies the validity of its signature
-func verifier(ctx context.Context, msgHandler chan HTTPMessage, v Verifier) error {
-	for {
-		select {
-		case msg := <-msgHandler:
-
-			msg.Response <- v.do(msg)
-
-		case <-ctx.Done():
-			log.Println("finishing verifier")
-			return nil
-		}
-	}
 }
 
 func (v *Verifier) do(msg HTTPMessage) HTTPResponse {

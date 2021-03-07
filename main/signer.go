@@ -16,7 +16,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -48,21 +47,6 @@ type Signer struct {
 	protocol       *ExtendedProtocol
 	env            string
 	authServiceURL string
-}
-
-// handle incoming messages, create, sign and send a ubirch protocol packet (UPP) to the ubirch backend
-func signer(ctx context.Context, msgHandler chan HTTPMessage, s Signer) error {
-	for {
-		select {
-		case msg := <-msgHandler:
-
-			msg.Response <- s.do(msg)
-
-		case <-ctx.Done():
-			log.Println("finishing signer")
-			return nil
-		}
-	}
 }
 
 func (s *Signer) do(msg HTTPMessage) HTTPResponse {

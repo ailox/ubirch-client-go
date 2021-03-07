@@ -109,44 +109,32 @@ func main() {
 		httpServer.SetUpCORS(conf.CORS_Origins, conf.Debug)
 	}
 
-	// listen to messages to sign via http
-	httpSrvSign := ServerEndpoint{
-		Path:           fmt.Sprintf("/{%s}", UUIDKey),
-		MessageHandler: make(chan HTTPMessage, 100),
-		RequiresAuth:   true,
-		AuthTokens:     conf.Devices,
-	}
-	httpServer.AddEndpoint(httpSrvSign)
-
-	// listen to messages to verify via http
-	httpSrvVerify := ServerEndpoint{
-		Path:           "/verify",
-		MessageHandler: make(chan HTTPMessage, 100),
-		RequiresAuth:   false,
-		AuthTokens:     nil,
-	}
-	httpServer.AddEndpoint(httpSrvVerify)
-
+	// set up signing endpoint
 	s := Signer{
 		protocol:       &p,
 		env:            conf.Env,
 		authServiceURL: conf.Niomon,
 	}
 
-	// start signer
-	g.Go(func() error {
-		return signer(ctx, httpSrvSign.MessageHandler, s)
+	httpServer.AddEndpoint(ServerEndpoint{
+		Path:         fmt.Sprintf("/{%s}", UUIDKey),
+		RequiresAuth: true,
+		AuthTokens:   conf.Devices,
+		Service:      &s,
 	})
 
+	// set up verification endpoint
 	v := Verifier{
 		protocol:                      &p,
 		verifyServiceURL:              conf.VerifyService,
 		keyServiceURL:                 conf.KeyService,
 		verifyFromKnownIdentitiesOnly: false,
 	}
-	// start verifier
-	g.Go(func() error {
-		return verifier(ctx, httpSrvVerify.MessageHandler, v)
+
+	httpServer.AddEndpoint(ServerEndpoint{
+		Path:         "/verify",
+		RequiresAuth: false,
+		Service:      &v,
 	})
 
 	// start HTTP server

@@ -30,18 +30,16 @@ const (
 type Sha256Sum [HashLen]byte
 
 type ServerEndpoint struct {
-	Path           string
-	MessageHandler chan HTTPMessage
-	RequiresAuth   bool
-	AuthTokens     map[string]string
-	Service        Service
+	Path         string
+	RequiresAuth bool
+	AuthTokens   map[string]string
+	Service      Service
 }
 
 type HTTPMessage struct {
-	ID       uuid.UUID
-	Auth     []byte
-	Hash     Sha256Sum
-	Response chan HTTPResponse
+	ID   uuid.UUID
+	Auth []byte
+	Hash Sha256Sum
 }
 
 type HTTPResponse struct {
@@ -150,8 +148,13 @@ func getHash(r *http.Request, isHash bool) (Sha256Sum, error) {
 }
 
 // blocks until response is received and forwards it to sender
-func forwardBackendResponse(w http.ResponseWriter, respChan chan HTTPResponse) {
+func sendResponseChannel(w http.ResponseWriter, respChan chan HTTPResponse) {
 	resp := <-respChan
+	sendResponse(w, resp)
+}
+
+// forwards response to sender
+func sendResponse(w http.ResponseWriter, resp HTTPResponse) {
 	for k, v := range resp.Headers {
 		w.Header().Set(k, v[0])
 	}
@@ -204,14 +207,9 @@ func (endpnt *ServerEndpoint) handleRequest(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// create HTTPMessage with individual response channel for each request
-	respChan := make(chan HTTPResponse)
+	resp := endpnt.Service.do(HTTPMessage{ID: id, Auth: auth, Hash: hash})
 
-	// submit message for signing
-	endpnt.MessageHandler <- HTTPMessage{ID: id, Auth: auth, Hash: hash, Response: respChan}
-
-	// wait for response from ubirch backend to be forwarded
-	forwardBackendResponse(w, respChan)
+	sendResponse(w, resp)
 }
 
 func (endpnt *ServerEndpoint) handleRequestHash(w http.ResponseWriter, r *http.Request) {

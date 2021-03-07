@@ -51,13 +51,7 @@ type Signer struct {
 }
 
 // handle incoming messages, create, sign and send a ubirch protocol packet (UPP) to the ubirch backend
-func signer(ctx context.Context, msgHandler chan HTTPMessage, p *ExtendedProtocol, conf Config) error {
-	s := Signer{
-		protocol:       p,
-		env:            conf.Env,
-		authServiceURL: conf.Niomon,
-	}
-
+func signer(ctx context.Context, msgHandler chan HTTPMessage, s Signer) error {
 	for {
 		select {
 		case msg := <-msgHandler:

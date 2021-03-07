@@ -127,9 +127,15 @@ func main() {
 	}
 	httpServer.AddEndpoint(httpSrvVerify)
 
+	s := Signer{
+		protocol:       &p,
+		env:            conf.Env,
+		authServiceURL: conf.Niomon,
+	}
+
 	// start signer
 	g.Go(func() error {
-		return signer(ctx, httpSrvSign.MessageHandler, &p, conf)
+		return signer(ctx, httpSrvSign.MessageHandler, s)
 	})
 
 	// start verifier

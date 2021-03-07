@@ -32,8 +32,6 @@ import (
 const lenRequestID = 16
 
 var (
-	env              string
-	authServiceURL   string
 	signedUPPHeader  = []byte{0x95, 0x22}
 	chainedUPPHeader = []byte{0x96, 0x23}
 )
@@ -46,21 +44,25 @@ type signingResponse struct {
 	RequestID string       `json:"requestID,omitempty"`
 }
 
+type Signer struct {
+	protocol       *ExtendedProtocol
+	env            string
+	authServiceURL string
+}
+
 // handle incoming messages, create, sign and send a ubirch protocol packet (UPP) to the ubirch backend
 func signer(ctx context.Context, msgHandler chan HTTPMessage, p *ExtendedProtocol, conf Config) error {
-	env = conf.Env
-	authServiceURL = conf.Niomon
+	s := Signer{
+		protocol:       p,
+		env:            conf.Env,
+		authServiceURL: conf.Niomon,
+	}
 
 	for {
 		select {
 		case msg := <-msgHandler:
-			name := msg.ID.String()
 
-			resp := handleSigningRequest(p, name, msg.Hash[:], msg.Auth)
-			msg.Response <- resp
-			if httpFailed(resp.StatusCode) {
-				log.Errorf("%s: %s", name, string(resp.Content))
-			}
+			msg.Response <- s.do(msg)
 
 		case <-ctx.Done():
 			log.Println("finishing signer")
@@ -69,17 +71,22 @@ func signer(ctx context.Context, msgHandler chan HTTPMessage, p *ExtendedProtoco
 	}
 }
 
-func handleSigningRequest(p *ExtendedProtocol, name string, hash []byte, auth []byte) HTTPResponse {
+func (s *Signer) do(msg HTTPMessage) HTTPResponse {
+	name := msg.ID.String()
+	hash := msg.Hash[:]
+	auth := msg.Auth
+
 	log.Infof("%s: hash: %s", name, base64.StdEncoding.EncodeToString(hash))
 
 	// send a UPP containing the hash to UBIRCH authentication service
-	requestUPPStruct, backendResp, err := anchorHash(p, name, hash, auth)
+	requestUPPStruct, backendResp, err := s.anchorHash(name, hash, auth)
 	if err != nil {
-		return errorResponse(http.StatusInternalServerError, err.Error())
+		log.Errorf("%s: %s", name, err.Error())
+		return errorResponse(http.StatusInternalServerError, "")
 	}
 
 	// verify validity of the backend response
-	responseUPPStruct, err := verifyBackendResponse(p, requestUPPStruct, backendResp)
+	responseUPPStruct, err := s.verifyBackendResponse(requestUPPStruct, backendResp)
 	if err != nil {
 		return getSigningResponse(http.StatusBadGateway, requestUPPStruct, backendResp, "n/a", err.Error())
 	}
@@ -95,9 +102,9 @@ func handleSigningRequest(p *ExtendedProtocol, name string, hash []byte, auth []
 	return getSigningResponse(backendResp.StatusCode, requestUPPStruct, backendResp, requestID, "")
 }
 
-func anchorHash(p *ExtendedProtocol, name string, hash []byte, auth []byte) (ubirch.UPP, HTTPResponse, error) {
+func (s *Signer) anchorHash(name string, hash []byte, auth []byte) (ubirch.UPP, HTTPResponse, error) {
 	// create a chained UPP
-	uppBytes, err := p.SignHash(name, hash, ubirch.Chained)
+	uppBytes, err := s.protocol.SignHash(name, hash, ubirch.Chained)
 	if err != nil {
 		return nil, HTTPResponse{}, fmt.Errorf("could not create UBIRCH Protocol Package: %v", err)
 	}
@@ -109,7 +116,7 @@ func anchorHash(p *ExtendedProtocol, name string, hash []byte, auth []byte) (ubi
 	}
 
 	// send UPP to ubirch backend
-	resp, err := post(authServiceURL, uppBytes, niomonHeaders(name, auth))
+	resp, err := post(s.authServiceURL, uppBytes, niomonHeaders(name, auth))
 	if err != nil {
 		return nil, HTTPResponse{}, fmt.Errorf("sending request to UBIRCH Authentication Service failed: %v", err)
 	}
@@ -118,22 +125,14 @@ func anchorHash(p *ExtendedProtocol, name string, hash []byte, auth []byte) (ubi
 	return uppStruct, resp, nil
 }
 
-func niomonHeaders(name string, auth []byte) map[string]string {
-	return map[string]string{
-		"x-ubirch-hardware-id": name,
-		"x-ubirch-auth-type":   "ubirch",
-		"x-ubirch-credential":  base64.StdEncoding.EncodeToString(auth),
-	}
-}
-
-func verifyBackendResponse(p *ExtendedProtocol, requUPPStruct ubirch.UPP, backendResp HTTPResponse) (ubirch.UPP, error) {
+func (s *Signer) verifyBackendResponse(requUPPStruct ubirch.UPP, backendResp HTTPResponse) (ubirch.UPP, error) {
 	// check if backend response is a UPP or something else, like an error message string, for example "Timeout"
 	if !hasUPPHeaders(backendResp.Content) {
 		return nil, fmt.Errorf("unexpected backend response: (%d) %q", backendResp.StatusCode, backendResp.Content)
 	}
 
 	// verify backend response signature
-	if verified, err := p.Verify(env, backendResp.Content); !verified {
+	if verified, err := s.protocol.Verify(s.env, backendResp.Content); !verified {
 		if err != nil {
 			log.Errorf("could not verify backend response signature: %v", err)
 		}
@@ -158,6 +157,14 @@ func verifyBackendResponse(p *ExtendedProtocol, requUPPStruct ubirch.UPP, backen
 	}
 
 	return respUPPStruct, nil
+}
+
+func niomonHeaders(name string, auth []byte) map[string]string {
+	return map[string]string{
+		"x-ubirch-hardware-id": name,
+		"x-ubirch-auth-type":   "ubirch",
+		"x-ubirch-credential":  base64.StdEncoding.EncodeToString(auth),
+	}
 }
 
 func hasUPPHeaders(data []byte) bool {
@@ -202,6 +209,10 @@ func getSigningResponse(respCode int, uppStruct ubirch.UPP, backendResp HTTPResp
 	})
 	if err != nil {
 		log.Warnf("error serializing signing response: %v", err)
+	}
+
+	if httpFailed(respCode) {
+		log.Errorf("%s: %s", uppStruct.GetUuid(), string(signingResp))
 	}
 
 	return HTTPResponse{

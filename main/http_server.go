@@ -34,6 +34,7 @@ type ServerEndpoint struct {
 	MessageHandler chan HTTPMessage
 	RequiresAuth   bool
 	AuthTokens     map[string]string
+	Service        Service
 }
 
 type HTTPMessage struct {
@@ -47,6 +48,10 @@ type HTTPResponse struct {
 	StatusCode int         `json:"statusCode"`
 	Headers    http.Header `json:"headers"`
 	Content    []byte      `json:"content"`
+}
+
+type Service interface {
+	do(msg HTTPMessage) HTTPResponse
 }
 
 // wrapper for http.Error that additionally logs the error message to std.Output

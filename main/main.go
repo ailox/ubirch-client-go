@@ -138,9 +138,15 @@ func main() {
 		return signer(ctx, httpSrvSign.MessageHandler, s)
 	})
 
+	v := Verifier{
+		protocol:                      &p,
+		verifyServiceURL:              conf.VerifyService,
+		keyServiceURL:                 conf.KeyService,
+		verifyFromKnownIdentitiesOnly: false,
+	}
 	// start verifier
 	g.Go(func() error {
-		return verifier(ctx, httpSrvVerify.MessageHandler, &p, conf)
+		return verifier(ctx, httpSrvVerify.MessageHandler, v)
 	})
 
 	// start HTTP server

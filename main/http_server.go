@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -20,11 +21,12 @@ import (
 )
 
 const (
-	UUIDKey  = "uuid"
-	BinType  = "application/octet-stream"
-	TextType = "text/plain"
-	JSONType = "application/json"
-	HashLen  = 32
+	UUIDKey        = "uuid"
+	HashEndpntPath = "/hash"
+	BinType        = "application/octet-stream"
+	TextType       = "text/plain"
+	JSONType       = "application/json"
+	HashLen        = 32
 )
 
 type Sha256Sum [HashLen]byte
@@ -78,6 +80,7 @@ func getUUID(r *http.Request) (uuid.UUID, error) {
 	return id, nil
 }
 
+// generate a sorted compact rendering of a JSON data package
 func getSortedCompactJSON(data []byte) ([]byte, error) {
 	var reqDump interface{}
 	var sortedCompactJson bytes.Buffer
@@ -101,19 +104,21 @@ func getSortedCompactJSON(data []byte) ([]byte, error) {
 	return sortedCompactJson.Bytes(), nil
 }
 
-func getHash(r *http.Request, isHash bool) (Sha256Sum, error) {
-	var hash Sha256Sum
+func getHash(r *http.Request) (Sha256Sum, error) {
+	hash := Sha256Sum{}
+	isHash := strings.HasSuffix(r.URL.Path, HashEndpntPath)
 
-	// read request body
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return Sha256Sum{}, fmt.Errorf("unable to read request body: %v", err)
 	}
 
-	contentType := ContentType(r)
 	if !isHash { // request contains original data
-		if contentType == JSONType {
-			// generate a sorted compact rendering of the json formatted request body
+
+		switch ContentType(r) {
+		case JSONType:
+			log.Debugf("received original data (JSON data package)")
+
 			data, err = getSortedCompactJSON(data)
 			if err != nil {
 				return Sha256Sum{}, err
@@ -121,29 +126,35 @@ func getHash(r *http.Request, isHash bool) (Sha256Sum, error) {
 
 			// only log original data if in debug-mode
 			log.Debugf("sorted compact JSON: %s", string(data))
-
-		} else if contentType != BinType {
+		case BinType:
+		default:
 			return Sha256Sum{}, fmt.Errorf("wrong content-type for original data. expected \"%s\" or \"%s\"", BinType, JSONType)
 		}
 
+		// hash original data
 		hash = sha256.Sum256(data)
+
 	} else { // request contains hash
-		if contentType == TextType {
+
+		switch ContentType(r) {
+		case TextType:
 			data, err = base64.StdEncoding.DecodeString(string(data))
 			if err != nil {
 				return Sha256Sum{}, fmt.Errorf("decoding base64 encoded hash failed: %v (%s)", err, string(data))
 			}
-		} else if contentType != BinType {
+		case BinType:
+		default:
 			return Sha256Sum{}, fmt.Errorf("wrong content-type for hash. expected \"%s\" or \"%s\"", BinType, TextType)
 		}
 
 		if len(data) != HashLen {
 			return Sha256Sum{}, fmt.Errorf("invalid hash size. expected %d bytes, got %d bytes (%s)", HashLen, len(data), data)
 		}
-		copy(hash[:], data)
-	}
 
-	return hash, err
+		copy(hash[:], data)
+
+	}
+	return hash, nil
 }
 
 // blocks until response is received and forwards it to sender
@@ -166,7 +177,7 @@ func sendResponse(w http.ResponseWriter, resp HTTPResponse) {
 
 // check if auth token from request header is correct.
 // Returns error if UUID is unknown or auth token does not match.
-func (endpnt *ServerEndpoint) checkAuth(id uuid.UUID, r *http.Request) ([]byte, error) {
+func (endpnt *ServerEndpoint) checkAuth(r *http.Request, id uuid.UUID) ([]byte, error) {
 	// check if UUID is known
 	idAuthToken, exists := endpnt.AuthTokens[id.String()]
 	if !exists || idAuthToken == "" {
@@ -182,7 +193,7 @@ func (endpnt *ServerEndpoint) checkAuth(id uuid.UUID, r *http.Request) ([]byte, 
 	return []byte(headerAuthToken), nil
 }
 
-func (endpnt *ServerEndpoint) handleRequest(w http.ResponseWriter, r *http.Request, isHash bool) {
+func (endpnt *ServerEndpoint) handleRequest(w http.ResponseWriter, r *http.Request) {
 	var msg HTTPMessage
 	var err error
 
@@ -192,14 +203,14 @@ func (endpnt *ServerEndpoint) handleRequest(w http.ResponseWriter, r *http.Reque
 			Error(w, err, http.StatusNotFound)
 			return
 		}
-		msg.Auth, err = endpnt.checkAuth(msg.ID, r)
+		msg.Auth, err = endpnt.checkAuth(r, msg.ID)
 		if err != nil {
 			Error(w, err, http.StatusUnauthorized)
 			return
 		}
 	}
 
-	msg.Hash, err = getHash(r, isHash)
+	msg.Hash, err = getHash(r)
 	if err != nil {
 		Error(w, err, http.StatusBadRequest)
 		return
@@ -207,14 +218,6 @@ func (endpnt *ServerEndpoint) handleRequest(w http.ResponseWriter, r *http.Reque
 
 	resp := endpnt.Service.do(msg)
 	sendResponse(w, resp)
-}
-
-func (endpnt *ServerEndpoint) handleRequestHash(w http.ResponseWriter, r *http.Request) {
-	endpnt.handleRequest(w, r, true)
-}
-
-func (endpnt *ServerEndpoint) handleRequestOriginalData(w http.ResponseWriter, r *http.Request) {
-	endpnt.handleRequest(w, r, false)
 }
 
 func (endpnt *ServerEndpoint) handleOptions(w http.ResponseWriter, r *http.Request) {
@@ -249,11 +252,11 @@ func (srv *HTTPServer) SetUpCORS(allowedOrigins []string, debug bool) {
 }
 
 func (srv *HTTPServer) AddEndpoint(endpoint ServerEndpoint) {
-	srv.router.Post(endpoint.Path, endpoint.handleRequestOriginalData)
-	srv.router.Post(endpoint.Path+"/hash", endpoint.handleRequestHash)
-
+	srv.router.Post(endpoint.Path, endpoint.handleRequest)
 	srv.router.Options(endpoint.Path, endpoint.handleOptions)
-	srv.router.Options(endpoint.Path+"/hash", endpoint.handleOptions)
+
+	srv.router.Post(path.Join(endpoint.Path+HashEndpntPath), endpoint.handleRequest)
+	srv.router.Options(path.Join(endpoint.Path+HashEndpntPath), endpoint.handleOptions)
 }
 
 func (srv *HTTPServer) Serve(ctx context.Context) error {

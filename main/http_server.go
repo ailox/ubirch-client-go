@@ -75,7 +75,6 @@ func getUUID(r *http.Request) (uuid.UUID, error) {
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("unable to parse \"%s\" as UUID: %s", urlParam, err)
 	}
-
 	return id, nil
 }
 
@@ -167,48 +166,46 @@ func sendResponse(w http.ResponseWriter, resp HTTPResponse) {
 
 // check if auth token from request header is correct.
 // Returns error if UUID is unknown or auth token does not match.
-func (endpnt *ServerEndpoint) checkAuth(id uuid.UUID, authHeader string) error {
+func (endpnt *ServerEndpoint) checkAuth(id uuid.UUID, r *http.Request) ([]byte, error) {
 	// check if UUID is known
 	idAuthToken, exists := endpnt.AuthTokens[id.String()]
-	if !exists {
-		return fmt.Errorf("unknown UUID \"%s\"", id.String())
+	if !exists || idAuthToken == "" {
+		return nil, fmt.Errorf("unknown UUID \"%s\"", id)
 	}
 
-	// check auth token
-	if authHeader != idAuthToken {
-		return fmt.Errorf("invalid auth token")
+	// check auth token from request header
+	headerAuthToken := XAuthToken(r)
+	if idAuthToken != headerAuthToken {
+		return nil, fmt.Errorf("invalid auth token")
 	}
 
-	return nil
+	return []byte(headerAuthToken), nil
 }
 
 func (endpnt *ServerEndpoint) handleRequest(w http.ResponseWriter, r *http.Request, isHash bool) {
-	var id uuid.UUID
-	var auth []byte
+	var msg HTTPMessage
 	var err error
 
 	if endpnt.RequiresAuth {
-		id, err = getUUID(r)
+		msg.ID, err = getUUID(r)
 		if err != nil {
 			Error(w, err, http.StatusNotFound)
 			return
 		}
-		err = endpnt.checkAuth(id, XAuthToken(r))
+		msg.Auth, err = endpnt.checkAuth(msg.ID, r)
 		if err != nil {
 			Error(w, err, http.StatusUnauthorized)
 			return
 		}
-		auth = []byte(XAuthToken(r))
 	}
 
-	hash, err := getHash(r, isHash)
+	msg.Hash, err = getHash(r, isHash)
 	if err != nil {
 		Error(w, err, http.StatusBadRequest)
 		return
 	}
 
-	resp := endpnt.Service.do(HTTPMessage{ID: id, Auth: auth, Hash: hash})
-
+	resp := endpnt.Service.do(msg)
 	sendResponse(w, resp)
 }
 

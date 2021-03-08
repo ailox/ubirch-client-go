@@ -105,55 +105,55 @@ func getSortedCompactJSON(data []byte) ([]byte, error) {
 }
 
 func getHash(r *http.Request) (Sha256Sum, error) {
-	hash := Sha256Sum{}
-	isHash := strings.HasSuffix(r.URL.Path, HashEndpntPath)
-
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return Sha256Sum{}, fmt.Errorf("unable to read request body: %v", err)
 	}
 
+	isHash := strings.HasSuffix(r.URL.Path, HashEndpntPath)
+
 	if !isHash { // request contains original data
-
-		switch ContentType(r) {
-		case JSONType:
-			log.Debugf("received original data (JSON data package)")
-
-			data, err = getSortedCompactJSON(data)
-			if err != nil {
-				return Sha256Sum{}, err
-			}
-
-			// only log original data if in debug-mode
-			log.Debugf("sorted compact JSON: %s", string(data))
-		case BinType:
-		default:
-			return Sha256Sum{}, fmt.Errorf("wrong content-type for original data. expected \"%s\" or \"%s\"", BinType, JSONType)
-		}
-
-		// hash original data
-		hash = sha256.Sum256(data)
-
+		return getHashFromDataRequest(r, data)
 	} else { // request contains hash
-
-		switch ContentType(r) {
-		case TextType:
-			data, err = base64.StdEncoding.DecodeString(string(data))
-			if err != nil {
-				return Sha256Sum{}, fmt.Errorf("decoding base64 encoded hash failed: %v (%s)", err, string(data))
-			}
-		case BinType:
-		default:
-			return Sha256Sum{}, fmt.Errorf("wrong content-type for hash. expected \"%s\" or \"%s\"", BinType, TextType)
-		}
-
-		if len(data) != HashLen {
-			return Sha256Sum{}, fmt.Errorf("invalid hash size. expected %d bytes, got %d bytes (%s)", HashLen, len(data), data)
-		}
-
-		copy(hash[:], data)
-
+		return getHashFromHashRequest(r, data)
 	}
+}
+
+func getHashFromDataRequest(r *http.Request, data []byte) (hash Sha256Sum, err error) {
+	switch ContentType(r) {
+	case JSONType:
+		data, err = getSortedCompactJSON(data)
+		if err != nil {
+			return Sha256Sum{}, err
+		}
+		// only log original data if in debug-mode
+		log.Debugf("sorted compact JSON: %s", string(data))
+	case BinType:
+	default:
+		return Sha256Sum{}, fmt.Errorf("wrong content-type for original data. expected \"%s\" or \"%s\"", BinType, JSONType)
+	}
+
+	// hash original data
+	return sha256.Sum256(data), nil
+}
+
+func getHashFromHashRequest(r *http.Request, data []byte) (hash Sha256Sum, err error) {
+	switch ContentType(r) {
+	case TextType:
+		data, err = base64.StdEncoding.DecodeString(string(data))
+		if err != nil {
+			return Sha256Sum{}, fmt.Errorf("decoding base64 encoded hash failed: %v (%s)", err, string(data))
+		}
+	case BinType:
+	default:
+		return Sha256Sum{}, fmt.Errorf("wrong content-type for hash. expected \"%s\" or \"%s\"", BinType, TextType)
+	}
+
+	if len(data) != HashLen {
+		return Sha256Sum{}, fmt.Errorf("invalid hash size. expected %d bytes, got %d bytes (%s)", HashLen, len(data), data)
+	}
+
+	copy(hash[:], data)
 	return hash, nil
 }
 

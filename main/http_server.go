@@ -64,12 +64,12 @@ type Service interface {
 }
 
 type AnchoringService struct {
-	*Signer
+	Signers    map[string]*Signer
 	AuthTokens map[string]string
 }
 
 type UpdateOperationService struct {
-	*Signer
+	Signers    map[string]*Signer
 	AuthTokens map[string]string
 }
 
@@ -105,7 +105,7 @@ func (service *AnchoringService) handleRequest(w http.ResponseWriter, r *http.Re
 	msg.Response = make(chan HTTPResponse)
 
 	// submit message for signing
-	service.MessageHandler <- msg
+	service.Signers[msg.ID.String()].MessageHandler <- msg
 
 	select {
 	case <-r.Context().Done():
@@ -145,7 +145,7 @@ func (service *UpdateOperationService) handleRequest(w http.ResponseWriter, r *h
 		return
 	}
 
-	resp := service.handleSigningRequest(msg)
+	resp := service.Signers[msg.ID.String()].handleSigningRequest(msg)
 	sendResponse(w, resp)
 }
 

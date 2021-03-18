@@ -103,24 +103,26 @@ func main() {
 		httpServer.SetUpCORS(conf.CORS_Origins, conf.Debug)
 	}
 
-	// initialize signer
-	s := Signer{
-		protocol:       &p,
-		env:            conf.Env,
-		authServiceURL: conf.Niomon,
-		MessageHandler: make(chan HTTPRequest, 100),
-	}
+	// initialize signer and start sequential signing routine for each identity
+	signers := make(map[string]*Signer, len(conf.Devices))
+	for id := range conf.Devices {
+		signers[id] = &Signer{
+			protocol:       &p,
+			env:            conf.Env,
+			authServiceURL: conf.Niomon,
+			MessageHandler: make(chan HTTPRequest, 100),
+		}
 
-	// start sequential signing routine
-	g.Go(func() error {
-		return signer(ctx, &s)
-	})
+		g.Go(func() error {
+			return signer(ctx, signers[id])
+		})
+	}
 
 	// set up endpoint for hash anchoring
 	httpServer.AddEndpoint(ServerEndpoint{
 		Path: fmt.Sprintf("/{%s}", UUIDKey),
 		Service: &AnchoringService{
-			Signer:     &s,
+			Signers:    signers,
 			AuthTokens: conf.Devices,
 		},
 	})
@@ -129,7 +131,7 @@ func main() {
 	httpServer.AddEndpoint(ServerEndpoint{
 		Path: fmt.Sprintf("/{%s}/{%s}", UUIDKey, OperationKey),
 		Service: &UpdateOperationService{
-			Signer:     &s,
+			Signers:    signers,
 			AuthTokens: conf.Devices,
 		},
 	})

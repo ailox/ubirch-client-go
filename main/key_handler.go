@@ -120,22 +120,16 @@ func initDeviceKeys(p *ExtendedProtocol, conf Config) error {
 			}
 		}
 
+		// store new key in persistent storage
+		err = p.PersistContext()
+		if err != nil {
+			return fmt.Errorf("unable to persist new key pair for UUID %s: %v", name, err)
+		}
+
 		// submit a X.509 Certificate Signing Request for the public key
 		err = submitCSR(p, uid, conf.CSR_Country, conf.CSR_Organization, conf.IdentityService)
 		if err != nil {
 			log.Errorf("submitting CSR for UUID %s failed: %v", name, err)
-		}
-
-		//  explicitly set prev. signature to all zeroes in protocol context if UUID does not have a prev. signature
-		// in order to be able to reset the prev. signature to all zeroes in case sending of the first UPP fails
-		if _, found := p.Signatures[uid]; !found {
-			p.Signatures[uid] = make([]byte, 64)
-		}
-
-		// store newly generated key in persistent storage
-		err = p.PersistContext()
-		if err != nil {
-			return fmt.Errorf("unable to persist new key pair for UUID %s: %v", name, err)
 		}
 	}
 	return nil

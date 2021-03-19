@@ -30,9 +30,9 @@ const (
 	JSONType     = "application/json"
 	HashLen      = 32
 
-	GatewayTimeout        = 60 * time.Second
-	ShutdownTimeout       = 30 * time.Second
-	BackendRequestTimeout = 30 * time.Second
+	GatewayTimeout        = 55 * time.Second
+	ShutdownTimeout       = 60 * time.Second
+	BackendRequestTimeout = 20 * time.Second
 	ReadTimeout           = 5 * time.Second
 	WriteTimeout          = 75 * time.Second
 	IdleTimeout           = 120 * time.Second
@@ -46,11 +46,12 @@ type ServerEndpoint struct {
 }
 
 type HTTPRequest struct {
-	ID        uuid.UUID
-	Auth      string
-	Hash      Sha256Sum
-	Operation operation
-	Response  chan HTTPResponse
+	ID         uuid.UUID
+	Auth       string
+	Hash       Sha256Sum
+	Operation  operation
+	Response   chan HTTPResponse
+	RequestCtx context.Context
 }
 
 type HTTPResponse struct {
@@ -103,6 +104,8 @@ func (service *AnchoringService) handleRequest(w http.ResponseWriter, r *http.Re
 
 	// create HTTPRequest with individual response channel for each request
 	msg.Response = make(chan HTTPResponse)
+
+	msg.RequestCtx = r.Context()
 
 	// submit message for signing
 	service.Signers[msg.ID.String()].MessageHandler <- msg

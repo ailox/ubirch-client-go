@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"net/http"
+	"time"
 
 	"github.com/ubirch/ubirch-protocol-go/ubirch/v2"
 
@@ -60,6 +61,23 @@ func signer(ctx context.Context, s *Signer) error {
 	for {
 		select {
 		case msg := <-s.MessageHandler:
+
+			// the message might have waited in the MessageHandler channel for a while
+			// check if the context is expired or canceled
+			if msg.RequestCtx.Err() != nil {
+				log.Warnf("%s: %v", msg.ID, msg.RequestCtx.Err())
+				continue
+			}
+
+			// check if there is enough time left to handle the request
+			requestDeadline, _ := msg.RequestCtx.Deadline()
+			timeBeforeDeadline := 0 - time.Now().Sub(requestDeadline)
+			log.Debugf("%v left before ctx deadline", timeBeforeDeadline)
+			if timeBeforeDeadline < BackendRequestTimeout { // TODO: or < 500 * time.Millisecond ?
+				msg.Response <- errorResponse(http.StatusGatewayTimeout, "")
+				continue
+			}
+
 			// buffer last previous signature to be able to reset it in case sending UPP to backend fails
 			prevSign, found := s.protocol.Signatures[msg.ID]
 			if !found {

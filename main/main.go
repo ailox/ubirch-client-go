@@ -104,17 +104,19 @@ func main() {
 	}
 
 	// initialize signer and start sequential signing routine for each identity
-	signers := make(map[string]*Signer, len(conf.Devices))
+	signers := make(map[string]Signer, len(conf.Devices))
+
 	for id := range conf.Devices {
-		signers[id] = &Signer{
+		s := Signer{
 			protocol:       &p,
 			env:            conf.Env,
 			authServiceURL: conf.Niomon,
 			MessageHandler: make(chan HTTPRequest, 100),
 		}
+		signers[id] = s
 
 		g.Go(func() error {
-			return signer(ctx, signers[id])
+			return signer(ctx, &s)
 		})
 	}
 

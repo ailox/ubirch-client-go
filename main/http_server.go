@@ -374,8 +374,7 @@ func (srv *HTTPServer) Serve(ctx context.Context) error {
 		log.Debug("shutting down HTTP server")
 		server.SetKeepAlivesEnabled(false) // disallow clients to create new long-running conns
 
-		shutdownWithTimeoutCtx, shutdownWithTimeoutCancel := context.WithTimeout(shutdownCtx, ShutdownTimeout)
-		defer shutdownWithTimeoutCancel()
+		shutdownWithTimeoutCtx, _ := context.WithTimeout(shutdownCtx, ShutdownTimeout)
 		defer shutdownCancel()
 
 		if err := server.Shutdown(shutdownWithTimeoutCtx); err != nil {

@@ -98,12 +98,6 @@ func initDeviceKeys(p *ExtendedProtocol, conf Config) error {
 			if err != nil {
 				return fmt.Errorf("generating new key pair for UUID %s failed: %v", name, err)
 			}
-
-			// store newly generated key in persistent storage
-			err = p.PersistContext()
-			if err != nil {
-				return fmt.Errorf("unable to persist new key pair for UUID %s: %v", name, err)
-			}
 		}
 
 		// get the public key
@@ -136,11 +130,12 @@ func initDeviceKeys(p *ExtendedProtocol, conf Config) error {
 		// in order to be able to reset the prev. signature to all zeroes in case sending of the first UPP fails
 		if _, found := p.Signatures[uid]; !found {
 			p.Signatures[uid] = make([]byte, 64)
+		}
 
-			err = p.PersistContext()
-			if err != nil {
-				return fmt.Errorf("unable to persist protocol context: %v", err)
-			}
+		// store newly generated key in persistent storage
+		err = p.PersistContext()
+		if err != nil {
+			return fmt.Errorf("unable to persist new key pair for UUID %s: %v", name, err)
 		}
 	}
 	return nil

@@ -70,7 +70,6 @@ func main() {
 		Keystore: ubirch.NewEncryptedKeystore(conf.SecretBytes),
 		Names:    map[string]uuid.UUID{},
 	}
-	p.Signatures = map[uuid.UUID][]byte{}
 
 	err = p.Init(configDir, contextFile, conf.DSN, conf.Keys)
 	if err != nil {

@@ -78,23 +78,20 @@ func signer(ctx context.Context, s *Signer) error {
 				continue
 			}
 
-			// buffer last previous signature to be able to reset it in case sending UPP to backend fails
-			prevSign, found := s.protocol.Signatures[msg.ID]
-			if !found {
-				prevSign = make([]byte, 64)
-			}
+			// buffer last previous signature to be able to recover it in case sending UPP to backend fails
+			prevSign := s.protocol.GetSignature(msg.ID)
 
 			resp := s.handleSigningRequest(msg)
 			msg.Response <- resp
 			if httpFailed(resp.StatusCode) {
-				// reset previous signature in protocol context to ensure intact chain
-				s.protocol.Signatures[msg.ID] = prevSign
+				// recover previous signature in protocol context to ensure intact chain
+				s.protocol.SetSignature(msg.ID, prevSign)
 			} else {
 				// persist last signature after UPP was successfully received in ubirch backend
 				err := s.protocol.PersistContext()
 				if err != nil {
 					return fmt.Errorf("unable to persist last signature: %v [\"%s\": \"%s\"]",
-						err, msg.ID.String(), base64.StdEncoding.EncodeToString(s.protocol.Signatures[msg.ID]))
+						err, msg.ID.String(), base64.StdEncoding.EncodeToString(s.protocol.GetSignature(msg.ID)))
 				}
 			}
 

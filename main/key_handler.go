@@ -15,6 +15,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"github.com/google/uuid"
@@ -73,6 +74,24 @@ func initDeviceKeys(p *ExtendedProtocol, conf Config) error {
 		return fmt.Errorf("unable to load protocol context: %v", err)
 	}
 
+	// inject keys from configuration to keystore
+	if conf.Keys != nil {
+		for name, key := range conf.Keys {
+			uid, err := uuid.Parse(name)
+			if err != nil {
+				return fmt.Errorf("unable to parse key name %s from key map to UUID: %v", name, err)
+			}
+			keyBytes, err := base64.StdEncoding.DecodeString(key)
+			if err != nil {
+				return fmt.Errorf("unable to decode private key string for %s: %v, string was: %s", name, err, key)
+			}
+			err = p.SetKey(name, uid, keyBytes)
+			if err != nil {
+				return fmt.Errorf("unable to insert private key to protocol context: %v", err)
+			}
+		}
+	}
+
 	for device, auth := range conf.Devices {
 		// check if device name is a valid UUID
 		uid, err := uuid.Parse(device)
@@ -120,17 +139,18 @@ func initDeviceKeys(p *ExtendedProtocol, conf Config) error {
 			}
 		}
 
-		// store new key in persistent storage
-		err = p.PersistContext()
-		if err != nil {
-			return fmt.Errorf("unable to persist new key pair for UUID %s: %v", name, err)
-		}
-
 		// submit a X.509 Certificate Signing Request for the public key
 		err = submitCSR(p, uid, conf.CSR_Country, conf.CSR_Organization, conf.IdentityService)
 		if err != nil {
 			log.Errorf("submitting CSR for UUID %s failed: %v", name, err)
 		}
 	}
+
+	// store keys in persistent storage
+	err = p.PersistContext()
+	if err != nil {
+		return fmt.Errorf("unable to persist protocol context: %v", err)
+	}
+
 	return nil
 }

@@ -71,7 +71,7 @@ func main() {
 		Names:    map[string]uuid.UUID{},
 	}
 
-	err = p.Init(configDir, contextFile, conf.DSN, conf.Keys)
+	err = p.Init(configDir, contextFile, conf.DSN)
 	if err != nil {
 		log.Fatal(err)
 	}

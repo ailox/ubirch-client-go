@@ -92,17 +92,17 @@ func initDeviceKeys(p *ExtendedProtocol, conf Config) error {
 		}
 	}
 
-	for device, auth := range conf.Devices {
-		// check if device name is a valid UUID
-		uid, err := uuid.Parse(device)
+	// create and register keys for identities
+	for name, auth := range conf.Devices {
+		// make sure device name is a valid UUID
+		uid, err := uuid.Parse(name)
 		if err != nil {
-			return fmt.Errorf("invalid device name \"%s\" (not a UUID): %s", device, err)
+			return fmt.Errorf("invalid device name \"%s\" (not a UUID): %s", name, err)
 		}
-		name := uid.String()
 
 		// make sure device has an auth token
 		if auth == "" {
-			return fmt.Errorf("no auth token found for device \"%s\"", device)
+			return fmt.Errorf("no auth token found for identity \"%s\"", name)
 		}
 
 		// check if there is a known signing key for the UUID

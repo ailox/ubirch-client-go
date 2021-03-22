@@ -47,7 +47,7 @@ const (
 	defaultTLSKeyFile  = "key.pem"
 )
 
-// configuration of the device
+// configuration of the client
 type Config struct {
 	Devices          map[string]string `json:"devices"`          // maps UUIDs to backend auth tokens (mandatory)
 	Secret           string            `json:"secret"`           // secret used to encrypt the key store (mandatory)
@@ -102,7 +102,7 @@ func (c *Config) Load(configDir string, filename string) error {
 		return err
 	}
 
-	err = c.loadDeviceIdentitiesFile(configDir)
+	err = c.loadIdentitiesFile(configDir)
 	if err != nil {
 		return err
 	}
@@ -246,9 +246,9 @@ func (c *Config) setDefaultURLs() error {
 	return nil
 }
 
-// loadDeviceIdentitiesFile loads device identities from the identities JSON file.
+// loadIdentitiesFile loads device identities from the identities JSON file.
 // Returns without error if file does not exist.
-func (c *Config) loadDeviceIdentitiesFile(configDir string) error {
+func (c *Config) loadIdentitiesFile(configDir string) error {
 	// if file does not exist, return right away
 	if _, err := os.Stat(identitiesFile); os.IsNotExist(err) {
 		return nil
@@ -267,7 +267,7 @@ func (c *Config) loadDeviceIdentitiesFile(configDir string) error {
 	}
 
 	if c.Devices == nil {
-		c.Devices = make(map[string]string)
+		c.Devices = make(map[string]string, len(identities))
 	}
 
 	for _, identity := range identities {
@@ -304,11 +304,11 @@ func (c *Config) loadAuthMap(configDir string) error {
 	}
 
 	if c.Keys == nil {
-		c.Keys = make(map[string]string)
+		c.Keys = make(map[string]string, len(buffer))
 	}
 
 	if c.Devices == nil {
-		c.Devices = make(map[string]string)
+		c.Devices = make(map[string]string, len(buffer))
 	}
 
 	for k, v := range buffer {

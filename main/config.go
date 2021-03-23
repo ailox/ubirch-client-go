@@ -33,10 +33,10 @@ const (
 	DEMO_STAGE = "demo"
 	PROD_STAGE = "prod"
 
-	keyURL      = "https://key.%s.ubirch.com/api/keyService/v1/pubkey"
-	identityURL = "https://identity.%s.ubirch.com/api/certs/v1/csr/register"
-	niomonURL   = "https://niomon.%s.ubirch.com/"
-	verifyURL   = "https://verify.%s.ubirch.com/api/upp/verify"
+	defaultKeyURL      = "https://key.%s.ubirch.com/api/keyService/v1/pubkey"
+	defaultIdentityURL = "https://identity.%s.ubirch.com/api/certs/v1/csr/register"
+	defaultNiomonURL   = "https://niomon.%s.ubirch.com/"
+	defaultVerifyURL   = "https://verify.%s.ubirch.com/api/upp/verify"
 
 	authEnv  = "UBIRCH_AUTH_MAP" // {UUID: [key, token]} (legacy)
 	authFile = "auth.json"       // {UUID: [key, token]} (legacy)
@@ -221,21 +221,21 @@ func (c *Config) setDefaultURLs() error {
 	log.Infof("UBIRCH backend \"%s\" environment", c.Env)
 
 	if c.KeyService == "" {
-		c.KeyService = fmt.Sprintf(keyURL, c.Env)
+		c.KeyService = fmt.Sprintf(defaultKeyURL, c.Env)
 	} else {
 		c.KeyService = strings.TrimSuffix(c.KeyService, "/mpack")
 	}
 
 	if c.IdentityService == "" {
-		c.IdentityService = fmt.Sprintf(identityURL, c.Env)
+		c.IdentityService = fmt.Sprintf(defaultIdentityURL, c.Env)
 	}
 
 	if c.Niomon == "" {
-		c.Niomon = fmt.Sprintf(niomonURL, c.Env)
+		c.Niomon = fmt.Sprintf(defaultNiomonURL, c.Env)
 	}
 
 	if c.VerifyService == "" {
-		c.VerifyService = fmt.Sprintf(verifyURL, c.Env)
+		c.VerifyService = fmt.Sprintf(defaultVerifyURL, c.Env)
 	}
 
 	log.Debugf(" - Key Service: %s", c.KeyService)

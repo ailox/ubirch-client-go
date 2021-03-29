@@ -102,20 +102,23 @@ func main() {
 		httpServer.SetUpCORS(conf.CORS_Origins, conf.Debug)
 	}
 
+	// initialize signer
+	s := Signer{
+		protocol:       &p,
+		env:            conf.Env,
+		authServiceURL: conf.Niomon,
+	}
+
 	// set up chaining routines (workers) for each identity
-	signers := make(map[string]*Signer, len(conf.Devices))
+	chainingJobs := make(map[string]chan HTTPRequest, len(conf.Devices))
 
 	for id := range conf.Devices {
-		s := Signer{
-			protocol:       &p,
-			env:            conf.Env,
-			authServiceURL: conf.Niomon,
-			MessageHandler: make(chan HTTPRequest, 100),
-		}
-		signers[id] = &s
+		jobs := make(chan HTTPRequest, 100)
+
+		chainingJobs[id] = jobs
 
 		g.Go(func() error {
-			return s.chainer(ctx)
+			return s.chainer(ctx, jobs)
 		})
 	}
 
@@ -123,7 +126,7 @@ func main() {
 	httpServer.AddEndpoint(ServerEndpoint{
 		Path: fmt.Sprintf("/{%s}", UUIDKey),
 		Service: &ChainingService{
-			Signers:    signers,
+			Jobs:       chainingJobs,
 			AuthTokens: conf.Devices,
 		},
 	})
@@ -132,7 +135,7 @@ func main() {
 	httpServer.AddEndpoint(ServerEndpoint{
 		Path: fmt.Sprintf("/{%s}/{%s}", UUIDKey, OperationKey),
 		Service: &UpdateService{
-			Signers:    signers,
+			Signer:     &s,
 			AuthTokens: conf.Devices,
 		},
 	})

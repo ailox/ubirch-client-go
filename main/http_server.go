@@ -65,12 +65,12 @@ type Service interface {
 }
 
 type ChainingService struct {
-	Signers    map[string]*Signer
+	Jobs       map[string]chan HTTPRequest
 	AuthTokens map[string]string
 }
 
 type UpdateService struct {
-	Signers    map[string]*Signer
+	*Signer
 	AuthTokens map[string]string
 }
 
@@ -109,7 +109,7 @@ func (service *ChainingService) handleRequest(w http.ResponseWriter, r *http.Req
 
 	// submit message for chaining
 	go func() {
-		service.Signers[msg.ID.String()].MessageHandler <- msg
+		service.Jobs[msg.ID.String()] <- msg
 	}()
 
 	select {
@@ -150,7 +150,7 @@ func (service *UpdateService) handleRequest(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	resp := service.Signers[msg.ID.String()].handleSigningRequest(msg)
+	resp := service.handleSigningRequest(msg)
 	sendResponse(w, resp)
 }
 

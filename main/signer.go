@@ -53,16 +53,15 @@ type Signer struct {
 	protocol       *ExtendedProtocol
 	env            string
 	authServiceURL string
-	MessageHandler chan HTTPRequest
 }
 
 // handle incoming messages, create, sign and send a chained ubirch protocol packet (UPP) to the ubirch backend
-func (s *Signer) chainer(ctx context.Context) error {
+func (s *Signer) chainer(ctx context.Context, jobs <-chan HTTPRequest) error {
 	for {
 		select {
-		case msg := <-s.MessageHandler:
+		case msg := <-jobs:
 
-			// the message might have waited in the MessageHandler channel for a while
+			// the message might have waited in the jobs channel for a while
 			// check if the context is expired or canceled
 			if msg.RequestCtx.Err() != nil {
 				log.Warnf("%s: %v", msg.ID, msg.RequestCtx.Err())

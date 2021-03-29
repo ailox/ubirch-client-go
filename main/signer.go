@@ -15,14 +15,12 @@
 package main
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
 	"net/http"
-	"time"
 
 	"github.com/ubirch/ubirch-protocol-go/ubirch/v2"
 
@@ -56,49 +54,28 @@ type Signer struct {
 }
 
 // handle incoming messages, create, sign and send a chained ubirch protocol packet (UPP) to the ubirch backend
-func (s *Signer) chainer(ctx context.Context, jobs <-chan HTTPRequest) error {
-	for {
-		select {
-		case msg := <-jobs:
+func (s *Signer) chainer(jobs <-chan HTTPRequest) error {
+	for msg := range jobs {
 
-			// the message might have waited in the jobs channel for a while
-			// check if the context is expired or canceled
-			if msg.RequestCtx.Err() != nil {
-				log.Warnf("%s: %v", msg.ID, msg.RequestCtx.Err())
-				continue
+		// buffer last previous signature to be able to recover it in case sending UPP to backend fails
+		prevSign := s.protocol.GetSignature(msg.ID)
+
+		resp := s.handleSigningRequest(msg)
+		msg.Response <- resp
+		if httpFailed(resp.StatusCode) {
+			// recover previous signature in protocol context to ensure intact chain
+			s.protocol.SetSignature(msg.ID, prevSign)
+		} else {
+			// persist last signature after UPP was successfully received in ubirch backend
+			err := s.protocol.PersistContext() // FIXME: fatal error: concurrent map read and map write
+			if err != nil {
+				return fmt.Errorf("unable to persist last signature: %v [\"%s\": \"%s\"]",
+					err, msg.ID.String(), base64.StdEncoding.EncodeToString(s.protocol.GetSignature(msg.ID)))
 			}
-
-			// check if there is enough time left to handle the request
-			requestDeadline, _ := msg.RequestCtx.Deadline()
-			timeBeforeDeadline := 0 - time.Now().Sub(requestDeadline)
-			log.Debugf("%v left before ctx deadline", timeBeforeDeadline)
-			if timeBeforeDeadline < BackendRequestTimeout { // TODO: or < 500 * time.Millisecond ?
-				msg.Response <- errorResponse(http.StatusGatewayTimeout, "")
-				continue
-			}
-
-			// buffer last previous signature to be able to recover it in case sending UPP to backend fails
-			prevSign := s.protocol.GetSignature(msg.ID)
-
-			resp := s.handleSigningRequest(msg)
-			msg.Response <- resp
-			if httpFailed(resp.StatusCode) {
-				// recover previous signature in protocol context to ensure intact chain
-				s.protocol.SetSignature(msg.ID, prevSign)
-			} else {
-				// persist last signature after UPP was successfully received in ubirch backend
-				err := s.protocol.PersistContext()
-				if err != nil {
-					return fmt.Errorf("unable to persist last signature: %v [\"%s\": \"%s\"]",
-						err, msg.ID.String(), base64.StdEncoding.EncodeToString(s.protocol.GetSignature(msg.ID)))
-				}
-			}
-
-		case <-ctx.Done():
-			log.Debug("shutting down chainer")
-			return nil
 		}
 	}
+
+	return nil
 }
 
 func (s *Signer) handleSigningRequest(msg HTTPRequest) HTTPResponse {

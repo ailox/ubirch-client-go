@@ -118,7 +118,7 @@ func main() {
 		chainingJobs[id] = jobs
 
 		g.Go(func() error {
-			return s.chainer(ctx, jobs)
+			return s.chainer(jobs)
 		})
 	}
 
@@ -140,21 +140,30 @@ func main() {
 		},
 	})
 
+	// initialize verifier
+	v := Verifier{
+		protocol:                      &p,
+		verifyServiceURL:              conf.VerifyService,
+		keyServiceURL:                 conf.KeyService,
+		verifyFromKnownIdentitiesOnly: false, // todo add to config
+	}
+
 	// set up endpoint for verification
 	httpServer.AddEndpoint(ServerEndpoint{
 		Path: "/verify",
 		Service: &VerificationService{
-			Verifier: &Verifier{
-				protocol:                      &p,
-				verifyServiceURL:              conf.VerifyService,
-				keyServiceURL:                 conf.KeyService,
-				verifyFromKnownIdentitiesOnly: false, // todo add to config
-			},
+			Verifier: &v,
 		},
 	})
 
 	// start HTTP server
 	g.Go(func() error {
+		defer func() {
+			// when server is shut down, close all chaining jobs, so chainers return
+			for _, jobs := range chainingJobs {
+				close(jobs)
+			}
+		}()
 		return httpServer.Serve(ctx)
 	})
 

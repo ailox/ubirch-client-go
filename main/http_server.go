@@ -107,8 +107,10 @@ func (service *ChainingService) handleRequest(w http.ResponseWriter, r *http.Req
 
 	msg.RequestCtx = r.Context()
 
-	// submit message for signing
-	service.Signers[msg.ID.String()].MessageHandler <- msg
+	// submit message for chaining
+	go func() {
+		service.Signers[msg.ID.String()].MessageHandler <- msg
+	}()
 
 	select {
 	case <-r.Context().Done():

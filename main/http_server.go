@@ -46,12 +46,11 @@ type ServerEndpoint struct {
 }
 
 type HTTPRequest struct {
-	ID         uuid.UUID
-	Auth       string
-	Hash       Sha256Sum
-	Operation  operation
-	Response   chan HTTPResponse
-	RequestCtx context.Context
+	ID        uuid.UUID
+	Auth      string
+	Hash      Sha256Sum
+	Operation operation
+	Response  chan HTTPResponse
 }
 
 type HTTPResponse struct {
@@ -104,8 +103,6 @@ func (service *ChainingService) handleRequest(w http.ResponseWriter, r *http.Req
 
 	// create HTTPRequest with individual response channel for each request
 	msg.Response = make(chan HTTPResponse)
-
-	msg.RequestCtx = r.Context()
 
 	// submit message for chaining
 	go func() {

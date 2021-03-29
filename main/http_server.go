@@ -64,12 +64,12 @@ type Service interface {
 	handleRequest(w http.ResponseWriter, r *http.Request)
 }
 
-type AnchoringService struct {
+type ChainingService struct {
 	Signers    map[string]*Signer
 	AuthTokens map[string]string
 }
 
-type UpdateOperationService struct {
+type UpdateService struct {
 	Signers    map[string]*Signer
 	AuthTokens map[string]string
 }
@@ -78,7 +78,7 @@ type VerificationService struct {
 	*Verifier
 }
 
-func (service *AnchoringService) handleRequest(w http.ResponseWriter, r *http.Request) {
+func (service *ChainingService) handleRequest(w http.ResponseWriter, r *http.Request) {
 	var msg HTTPRequest
 	var err error
 
@@ -120,7 +120,7 @@ func (service *AnchoringService) handleRequest(w http.ResponseWriter, r *http.Re
 	}
 }
 
-func (service *UpdateOperationService) handleRequest(w http.ResponseWriter, r *http.Request) {
+func (service *UpdateService) handleRequest(w http.ResponseWriter, r *http.Request) {
 	var msg HTTPRequest
 	var err error
 

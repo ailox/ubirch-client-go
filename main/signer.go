@@ -56,8 +56,8 @@ type Signer struct {
 	MessageHandler chan HTTPRequest
 }
 
-// handle incoming messages, create, sign and send a ubirch protocol packet (UPP) to the ubirch backend
-func signer(ctx context.Context, s *Signer) error {
+// handle incoming messages, create, sign and send a chained ubirch protocol packet (UPP) to the ubirch backend
+func (s *Signer) chainer(ctx context.Context) error {
 	for {
 		select {
 		case msg := <-s.MessageHandler:
@@ -96,7 +96,7 @@ func signer(ctx context.Context, s *Signer) error {
 			}
 
 		case <-ctx.Done():
-			log.Debug("shutting down signer")
+			log.Debug("shutting down chainer")
 			return nil
 		}
 	}

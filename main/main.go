@@ -102,7 +102,7 @@ func main() {
 		httpServer.SetUpCORS(conf.CORS_Origins, conf.Debug)
 	}
 
-	// initialize signer and start sequential signing routine for each identity
+	// set up chaining routines (workers) for each identity
 	signers := make(map[string]*Signer, len(conf.Devices))
 
 	for id := range conf.Devices {
@@ -115,29 +115,29 @@ func main() {
 		signers[id] = &s
 
 		g.Go(func() error {
-			return signer(ctx, &s)
+			return s.chainer(ctx)
 		})
 	}
 
-	// set up endpoint for hash anchoring
+	// set up endpoint for chaining
 	httpServer.AddEndpoint(ServerEndpoint{
 		Path: fmt.Sprintf("/{%s}", UUIDKey),
-		Service: &AnchoringService{
+		Service: &ChainingService{
 			Signers:    signers,
 			AuthTokens: conf.Devices,
 		},
 	})
 
-	// set up endpoint for hash update operations
+	// set up endpoint for update operations
 	httpServer.AddEndpoint(ServerEndpoint{
 		Path: fmt.Sprintf("/{%s}/{%s}", UUIDKey, OperationKey),
-		Service: &UpdateOperationService{
+		Service: &UpdateService{
 			Signers:    signers,
 			AuthTokens: conf.Devices,
 		},
 	})
 
-	// set up endpoint for hash verification
+	// set up endpoint for verification
 	httpServer.AddEndpoint(ServerEndpoint{
 		Path: "/verify",
 		Service: &VerificationService{

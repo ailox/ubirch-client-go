@@ -70,7 +70,7 @@ func (s *Signer) chainer(jobs <-chan HTTPRequest) error {
 
 		// persist last signature only if UPP was successfully received by ubirch backend
 		if httpSuccess(resp.StatusCode) {
-			signature := upp[:len(upp)-ubirch.SignatureLen]
+			signature := upp[len(upp)-ubirch.SignatureLen:]
 			err := s.protocol.SetSignature(msg.ID, signature)
 			if err != nil {
 				return fmt.Errorf("unable to persist last signature: %v [\"%s\": \"%s\"]",

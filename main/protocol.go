@@ -33,7 +33,7 @@ import (
 
 type ExtendedProtocol struct {
 	ubirch.Protocol
-	signatures      map[uuid.UUID][]byte
+	Signatures      map[uuid.UUID][]byte // todo do not export signatures
 	signaturesMutex sync.RWMutex
 	db              Database
 	contextFile     string
@@ -41,7 +41,7 @@ type ExtendedProtocol struct {
 
 // Init sets keys in crypto context and updates keystore in persistent storage
 func (p *ExtendedProtocol) Init(configDir string, filename string, dsn string) error {
-	p.signatures = make(map[uuid.UUID][]byte)
+	p.Signatures = make(map[uuid.UUID][]byte)
 
 	// check if we want to use a database as persistent storage
 	if dsn != "" {
@@ -65,29 +65,26 @@ func (p *ExtendedProtocol) Init(configDir string, filename string, dsn string) e
 		return fmt.Errorf("unable to load protocol context: %v", err)
 	}
 
-	if len(p.signatures) != 0 {
-		log.Printf("loaded existing protocol context: %d signatures", len(p.signatures))
+	if len(p.Signatures) != 0 {
+		log.Printf("loaded existing protocol context: %d signatures", len(p.Signatures))
 	}
 	return nil
 }
 
 func (p *ExtendedProtocol) GetSignature(id uuid.UUID) ([]byte, error) {
 	p.signaturesMutex.RLock()
-	sign, found := p.signatures[id]
+	sign, found := p.Signatures[id]
 	p.signaturesMutex.RUnlock()
 
 	if !found {
-		return make([]byte, ubirch.SignatureLen), nil
+		sign = make([]byte, ubirch.SignatureLen)
 	}
 	return sign, nil
 }
 
 func (p *ExtendedProtocol) SetSignature(id uuid.UUID, signature []byte) error {
 	p.signaturesMutex.Lock()
-	if p.signatures == nil {
-		p.signatures = make(map[uuid.UUID][]byte)
-	}
-	p.signatures[id] = signature
+	p.Signatures[id] = signature
 	p.signaturesMutex.Unlock()
 
 	return nil

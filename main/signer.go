@@ -55,14 +55,20 @@ type Signer struct {
 }
 
 // handle incoming messages, create, sign and send a chained ubirch protocol packet (UPP) to the ubirch backend
-func (s *Signer) chainer(jobs <-chan HTTPRequest) error {
+func (s *Signer) chainer(chainerID string, jobs <-chan HTTPRequest) error {
 	for msg := range jobs {
+		if msg.ID.String() != chainerID {
+			log.Errorf("%s: chainer received request with wrong ID: %s", chainerID, msg.ID)
+			continue
+		}
+
 		log.Infof("%s: %s hash: %s", msg.ID, msg.Operation, base64.StdEncoding.EncodeToString(msg.Hash[:]))
 
 		upp, err := s.getChainedUPP(msg.ID, msg.Hash[:])
 		if err != nil {
 			log.Errorf("%s: could not create UBIRCH Protocol Package: %v", msg.ID, err)
 			msg.Response <- errorResponse(http.StatusInternalServerError, "")
+			continue
 		}
 
 		resp := s.sendUPP(msg, upp)
@@ -79,6 +85,7 @@ func (s *Signer) chainer(jobs <-chan HTTPRequest) error {
 		}
 	}
 
+	log.Debugf("%s: chainer done", chainerID)
 	return nil
 }
 

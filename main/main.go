@@ -118,7 +118,7 @@ func main() {
 		chainingJobs[id] = jobs
 
 		g.Go(func() error {
-			return s.chainer(jobs)
+			return s.chainer(id, jobs)
 		})
 	}
 

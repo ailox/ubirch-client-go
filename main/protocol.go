@@ -71,24 +71,26 @@ func (p *ExtendedProtocol) Init(configDir string, filename string, dsn string) e
 	return nil
 }
 
-func (p *ExtendedProtocol) GetSignature(id uuid.UUID) []byte {
+func (p *ExtendedProtocol) GetSignature(id uuid.UUID) ([]byte, error) {
 	p.signaturesMutex.RLock()
 	sign, found := p.signatures[id]
 	p.signaturesMutex.RUnlock()
 
 	if !found {
-		return make([]byte, ubirch.SignatureLen)
+		return make([]byte, ubirch.SignatureLen), nil
 	}
-	return sign
+	return sign, nil
 }
 
-func (p *ExtendedProtocol) SetSignature(id uuid.UUID, signature []byte) {
+func (p *ExtendedProtocol) SetSignature(id uuid.UUID, signature []byte) error {
 	p.signaturesMutex.Lock()
 	if p.signatures == nil {
 		p.signatures = make(map[uuid.UUID][]byte)
 	}
 	p.signatures[id] = signature
 	p.signaturesMutex.Unlock()
+
+	return nil
 }
 
 func (p *ExtendedProtocol) Deinit() error {

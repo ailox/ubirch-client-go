@@ -93,7 +93,7 @@ func (service *ChainingService) handleRequest(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	msg.Operation = anchorHash
+	msg.Operation = chainHash
 
 	msg.Hash, err = getHash(r)
 	if err != nil {
@@ -147,7 +147,7 @@ func (service *UpdateService) handleRequest(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	resp := service.handleSigningRequest(msg)
+	resp := service.updateHash(msg)
 	sendResponse(w, resp)
 }
 

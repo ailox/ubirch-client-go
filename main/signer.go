@@ -56,21 +56,14 @@ type Signer struct {
 // handle incoming messages, create, sign and send a chained ubirch protocol packet (UPP) to the ubirch backend
 func (s *Signer) chainer(jobs <-chan HTTPRequest) error {
 	for msg := range jobs {
-
-		// buffer last previous signature to be able to recover it in case sending UPP to backend fails
-		prevSign := s.protocol.GetSignature(msg.ID)
-
 		resp := s.handleSigningRequest(msg)
 		msg.Response <- resp
-		if httpFailed(resp.StatusCode) {
-			// recover previous signature in protocol context to ensure intact chain
-			s.protocol.SetSignature(msg.ID, prevSign)
-		} else {
+		if httpSuccess(resp.StatusCode) {
 			// persist last signature after UPP was successfully received in ubirch backend
-			err := s.protocol.PersistContext()
+			err := s.protocol.SetSignature(msg.ID)
 			if err != nil {
 				return fmt.Errorf("unable to persist last signature: %v [\"%s\": \"%s\"]",
-					err, msg.ID.String(), base64.StdEncoding.EncodeToString(s.protocol.GetSignature(msg.ID)))
+					err, msg.ID.String(), base64.StdEncoding.EncodeToString(s.protocol.GetSignature(msg.ID))) // fixme
 			}
 		}
 	}
@@ -83,19 +76,21 @@ func (s *Signer) handleSigningRequest(msg HTTPRequest) HTTPResponse {
 	hash := msg.Hash[:]
 	auth := msg.Auth
 
+	log.Infof("%s: %s hash: %s", name, msg.Operation, base64.StdEncoding.EncodeToString(hash))
+
 	// create and sign a UPP containing the hash
 	var upp []byte
 	var err error
 
 	switch msg.Operation {
 	case anchorHash:
-		upp, err = s.anchorHash(name, hash)
+		upp, err = s.chainHash(msg.ID, hash)
 	case disableHash:
-		upp, err = s.disableHash(name, hash)
+		upp, err = s.updateHash(msg.ID, hash, ubirch.Delete)
 	case enableHash:
-		upp, err = s.enableHash(name, hash)
+		upp, err = s.updateHash(msg.ID, hash, ubirch.Enable)
 	case deleteHash:
-		upp, err = s.deleteHash(name, hash)
+		upp, err = s.updateHash(msg.ID, hash, ubirch.Delete)
 	default:
 		err = fmt.Errorf("unsupported operation: \"%s\"", msg.Operation)
 	}
@@ -131,28 +126,18 @@ func (s *Signer) handleSigningRequest(msg HTTPRequest) HTTPResponse {
 	return getSigningResponse(backendResp.StatusCode, msg, upp, backendResp, requestID, "")
 }
 
-func (s *Signer) anchorHash(name string, hash []byte) ([]byte, error) {
-	log.Infof("%s: anchoring hash: %s", name, base64.StdEncoding.EncodeToString(hash))
+func (s *Signer) chainHash(id uuid.UUID, hash []byte) ([]byte, error) {
+	prevSignature := s.protocol.GetSignature(id)
 
-	return s.protocol.SignHash(name, hash, ubirch.Chained)
+	return s.protocol.Sign(
+		&ubirch.ChainedUPP{Version: ubirch.Chained, Uuid: id, PrevSignature: prevSignature, Hint: ubirch.Binary, Payload: hash},
+	)
 }
 
-func (s *Signer) disableHash(name string, hash []byte) ([]byte, error) {
-	log.Infof("%s: disabling hash: %s", name, base64.StdEncoding.EncodeToString(hash))
-
-	return s.protocol.SignHashExtended(name, hash, ubirch.Signed, ubirch.Disable)
-}
-
-func (s *Signer) enableHash(name string, hash []byte) ([]byte, error) {
-	log.Infof("%s: enabling hash: %s", name, base64.StdEncoding.EncodeToString(hash))
-
-	return s.protocol.SignHashExtended(name, hash, ubirch.Signed, ubirch.Enable)
-}
-
-func (s *Signer) deleteHash(name string, hash []byte) ([]byte, error) {
-	log.Infof("%s: deleting hash: %s", name, base64.StdEncoding.EncodeToString(hash))
-
-	return s.protocol.SignHashExtended(name, hash, ubirch.Signed, ubirch.Delete)
+func (s *Signer) updateHash(id uuid.UUID, hash []byte, hint ubirch.Hint) ([]byte, error) {
+	return s.protocol.Sign(
+		&ubirch.SignedUPP{Version: ubirch.Signed, Uuid: id, Hint: hint, Payload: hash},
+	)
 }
 
 func getRequestID(respUPP ubirch.UPP) (string, error) {

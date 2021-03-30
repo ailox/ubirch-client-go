@@ -83,6 +83,10 @@ func (p *ExtendedProtocol) GetSignature(id uuid.UUID) ([]byte, error) {
 }
 
 func (p *ExtendedProtocol) SetSignature(id uuid.UUID, signature []byte) error {
+	if len(signature) != ubirch.SignatureLen {
+		return fmt.Errorf("invalid signature length")
+	}
+
 	p.signaturesMutex.Lock()
 	p.Signatures[id] = signature
 	p.signaturesMutex.Unlock()

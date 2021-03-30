@@ -113,7 +113,7 @@ func main() {
 	chainingJobs := make(map[string]chan HTTPRequest, len(conf.Devices))
 
 	for id := range conf.Devices {
-		jobs := make(chan HTTPRequest, 100)
+		jobs := make(chan HTTPRequest, 300) // 6 rps * 50 s
 
 		chainingJobs[id] = jobs
 

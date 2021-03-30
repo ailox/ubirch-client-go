@@ -105,10 +105,15 @@ func (service *ChainingService) handleRequest(w http.ResponseWriter, r *http.Req
 	msg.Response = make(chan HTTPResponse)
 
 	// submit message for chaining
-	go func() {
-		service.Jobs[msg.ID.String()] <- msg
-	}()
+	select {
+	case service.Jobs[msg.ID.String()] <- msg:
+	default: // do not accept any more requests if buffer is full
+		log.Warnf("%s: resquest skipped due to blocking channel", msg.ID)
+		http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
+		return
+	}
 
+	// wait for response
 	select {
 	case <-r.Context().Done():
 		log.Errorf("%s: 504 Gateway Timeout", msg.ID)

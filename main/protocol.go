@@ -19,10 +19,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/ubirch/ubirch-protocol-go/ubirch/v2"
 
@@ -31,12 +33,16 @@ import (
 
 type ExtendedProtocol struct {
 	ubirch.Protocol
-	db          Database
-	contextFile string
+	signatures      map[uuid.UUID][]byte
+	signaturesMutex sync.RWMutex
+	db              Database
+	contextFile     string
 }
 
 // Init sets keys in crypto context and updates keystore in persistent storage
 func (p *ExtendedProtocol) Init(configDir string, filename string, dsn string) error {
+	p.signatures = make(map[uuid.UUID][]byte)
+
 	// check if we want to use a database as persistent storage
 	if dsn != "" {
 		// use the database
@@ -59,11 +65,30 @@ func (p *ExtendedProtocol) Init(configDir string, filename string, dsn string) e
 		return fmt.Errorf("unable to load protocol context: %v", err)
 	}
 
-	// FIXME
-	//if len(p.signatures) != 0 {
-	//	log.Printf("loaded existing protocol context: %d signatures", len(p.signatures))
-	//}
+	if len(p.signatures) != 0 {
+		log.Printf("loaded existing protocol context: %d signatures", len(p.signatures))
+	}
 	return nil
+}
+
+func (p *ExtendedProtocol) GetSignature(id uuid.UUID) []byte {
+	p.signaturesMutex.RLock()
+	sign, found := p.signatures[id]
+	p.signaturesMutex.RUnlock()
+
+	if !found {
+		return make([]byte, ubirch.SignatureLen)
+	}
+	return sign
+}
+
+func (p *ExtendedProtocol) SetSignature(id uuid.UUID, signature []byte) {
+	p.signaturesMutex.Lock()
+	if p.signatures == nil {
+		p.signatures = make(map[uuid.UUID][]byte)
+	}
+	p.signatures[id] = signature
+	p.signaturesMutex.Unlock()
 }
 
 func (p *ExtendedProtocol) Deinit() error {
@@ -138,7 +163,7 @@ func (p *ExtendedProtocol) loadFile(file string) error {
 
 // Value lets the struct implement the driver.Valuer interface. This method
 // simply returns the JSON-encoded representation of the struct.
-func (p ExtendedProtocol) Value() (driver.Value, error) {
+func (p *ExtendedProtocol) Value() (driver.Value, error) {
 	return json.Marshal(p)
 }
 
@@ -149,5 +174,5 @@ func (p *ExtendedProtocol) Scan(value interface{}) error {
 	if !ok {
 		return errors.New("type assertion to []byte failed")
 	}
-	return json.Unmarshal(b, &p)
+	return json.Unmarshal(b, p)
 }

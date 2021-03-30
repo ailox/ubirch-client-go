@@ -110,6 +110,9 @@ func (p *ExtendedProtocol) Deinit() error {
 
 // PersistContext saves current ubirch-protocol context, storing keystore, key certificates and signatures
 func (p *ExtendedProtocol) PersistContext() error {
+	p.signaturesMutex.RLock()
+	defer p.signaturesMutex.RUnlock()
+
 	if p.db != nil {
 		return p.db.SetProtocolContext(p)
 	} else if p.contextFile != "" {
@@ -121,6 +124,9 @@ func (p *ExtendedProtocol) PersistContext() error {
 
 // LoadContext loads current ubirch-protocol context, loading keys and signatures
 func (p *ExtendedProtocol) LoadContext() error {
+	p.signaturesMutex.Lock()
+	defer p.signaturesMutex.Unlock()
+
 	if p.db != nil {
 		return p.db.GetProtocolContext(p)
 	} else if p.contextFile != "" {

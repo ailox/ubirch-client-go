@@ -41,6 +41,12 @@ func shutdown(cancel context.CancelFunc) {
 	cancel()
 }
 
+func startChainer(g *errgroup.Group, s *Signer, id string, jobs <-chan HTTPRequest) {
+	g.Go(func() error {
+		return s.chainer(id, jobs)
+	})
+}
+
 func main() {
 	const (
 		Version     = "v2.0.0"
@@ -114,12 +120,8 @@ func main() {
 
 	for id := range conf.Devices {
 		jobs := make(chan HTTPRequest, 200) // 4 rps * 50 s
-
 		chainingJobs[id] = jobs
-
-		g.Go(func() error {
-			return s.chainer(id, jobs)
-		})
+		startChainer(g, &s, id, jobs)
 	}
 
 	// set up endpoint for chaining

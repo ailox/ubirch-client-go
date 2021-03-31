@@ -11,5 +11,8 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.5.1
 	github.com/ubirch/ubirch-protocol-go/ubirch/v2 v2.2.5-0.20210310233515-4e2042e57805
+	golang.org/x/net v0.0.0-20210326220855-61e056675ecf // indirect
 	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a
 )
+
+replace github.com/ubirch/ubirch-protocol-go/ubirch/v2 v2.2.5-0.20210310233515-4e2042e57805 => ../../ubirch-protocol-go/ubirch

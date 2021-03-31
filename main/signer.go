@@ -39,6 +39,14 @@ const (
 	lenRequestID = 16
 )
 
+var hintLookup = map[operation]ubirch.Hint{
+	chainHash:   ubirch.Binary,
+	anchorHash:  ubirch.Binary,
+	disableHash: ubirch.Disable,
+	enableHash:  ubirch.Enable,
+	deleteHash:  ubirch.Delete,
+}
+
 type signingResponse struct {
 	Error     string       `json:"error,omitempty"`
 	Operation operation    `json:"operation,omitempty"`
@@ -116,19 +124,9 @@ func (s *Signer) getChainedUPP(id uuid.UUID, hash []byte) ([]byte, error) {
 }
 
 func (s *Signer) getSignedUPP(id uuid.UUID, hash []byte, op operation) ([]byte, error) {
-	var hint ubirch.Hint
-
-	switch op {
-	case anchorHash:
-		hint = ubirch.Binary
-	case disableHash:
-		hint = ubirch.Disable
-	case enableHash:
-		hint = ubirch.Enable
-	case deleteHash:
-		hint = ubirch.Delete
-	default:
-		return nil, fmt.Errorf("%s: unsupported operation: \"%s\"", op)
+	hint, found := hintLookup[op]
+	if !found {
+		return nil, fmt.Errorf("%s: invalid operation: \"%s\"", id, op)
 	}
 
 	return s.protocol.Sign(

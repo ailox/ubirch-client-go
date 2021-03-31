@@ -96,7 +96,7 @@ func (s *Signer) chainer(chainerID string, jobs <-chan HTTPRequest) error {
 		}
 	}
 
-	log.Debugf("%s: chainer done", chainerID)
+	log.Debugf("%s: chainer return", chainerID)
 	return nil
 }
 
